@@ -6,7 +6,6 @@
     android:orientation="vertical"
     android:padding="4dp">
 
-    <!-- Display: tap to open the history -->
     <LinearLayout
         android:id="@+id/w_display"
         android:layout_width="match_parent"
@@ -79,7 +78,6 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Keypad + history panel -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

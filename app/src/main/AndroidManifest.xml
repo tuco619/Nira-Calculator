@@ -14,13 +14,25 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".CalcWidgetProvider" android:exported="true">
+        <receiver android:name=".CalcWidgetProvider" android:exported="true" android:label="Calculator - Dogs">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/calc_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/calc_widget_info" />
+        </receiver>
+
+        <receiver android:name=".CalcWidgetProvider2" android:exported="true" android:label="Calculator - Purple">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/calc_widget_info2" />
+        </receiver>
+
+        <receiver android:name=".CalcWidgetProvider3" android:exported="true" android:label="Calculator - Black">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/calc_widget_info3" />
         </receiver>
     </application>
 </manifest>

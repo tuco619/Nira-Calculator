@@ -4,7 +4,6 @@ import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
@@ -17,13 +16,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
     private val MP = ViewGroup.LayoutParams.MATCH_PARENT
-    private val lilac = Color.parseColor("#F1E6FF")
-    private val grey = Color.parseColor("#A995D6")
-    private val accent = Color.parseColor("#B58CFF")
 
+    private lateinit var calcTheme: CalcTheme
     private var state = CalcState()
     private var histOpen = false
 
@@ -39,6 +37,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sp = getSharedPreferences("calc", MODE_PRIVATE)
+        calcTheme = Themes.ALL[sp.getInt("theme", 0).coerceIn(0, Themes.ALL.size - 1)]
         state = CalcState(
             sp.getString("expr", "") ?: "",
             sp.getBoolean("fresh", false),
@@ -49,36 +48,49 @@ class MainActivity : Activity() {
         refresh()
     }
 
-    // After the app was force-closed, Android cancels the widget's tap actions.
-    // Asking the widget to redraw gives it fresh ones, so it works again.
+    // After the app was force-closed, Android cancels the widgets' tap actions.
+    // Asking the widgets to redraw gives them fresh ones, so they work again.
     override fun onResume() {
         super.onResume()
         refreshWidgets()
     }
 
     private fun refreshWidgets() {
-        val ids = AppWidgetManager.getInstance(this)
-            .getAppWidgetIds(ComponentName(this, CalcWidgetProvider::class.java))
-        if (ids.isEmpty()) return
-        sendBroadcast(
-            Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
-                .setClass(this, CalcWidgetProvider::class.java)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+        val mgr = AppWidgetManager.getInstance(this)
+        val providers = listOf(
+            CalcWidgetProvider::class.java,
+            CalcWidgetProvider2::class.java,
+            CalcWidgetProvider3::class.java
         )
+        for (cls in providers) {
+            val ids = mgr.getAppWidgetIds(ComponentName(this, cls))
+            if (ids.isEmpty()) continue
+            sendBroadcast(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                    .setClass(this, cls)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+            )
+        }
     }
 
-    private fun autoText(maxSp: Int, minSp: Int, color: Int, bold: Boolean): TextView = TextView(this).apply {
+    private fun cycleTheme() {
+        val next = (calcTheme.index + 1) % Themes.ALL.size
+        getSharedPreferences("calc", MODE_PRIVATE).edit().putInt("theme", next).apply()
+        Toast.makeText(this, Themes.ALL[next].label, Toast.LENGTH_SHORT).show()
+        recreate()
+    }
+
+    private fun autoText(maxSp: Int, minSp: Int, color: Int): TextView = TextView(this).apply {
         setTextColor(color)
         gravity = Gravity.END or Gravity.CENTER_VERTICAL
         maxLines = 1
         includeFontPadding = false
-        if (bold) typeface = Typeface.DEFAULT_BOLD
         setAutoSizeTextTypeUniformWithConfiguration(minSp, maxSp, 1, TypedValue.COMPLEX_UNIT_SP)
     }
 
     private fun buildUi(): View {
         val root = FrameLayout(this)
-        root.setBackgroundResource(R.drawable.bg_app)
+        root.setBackgroundResource(calcTheme.bgApp)
         root.fitsSystemWindows = true
 
         val col = LinearLayout(this)
@@ -90,23 +102,32 @@ class MainActivity : Activity() {
         val display = LinearLayout(this)
         display.orientation = LinearLayout.HORIZONTAL
         display.gravity = Gravity.CENTER_VERTICAL
-        display.setBackgroundResource(R.drawable.bg_display)
+        display.setBackgroundResource(calcTheme.bgDisplay)
         display.setPadding(dp(12), dp(8), dp(16), dp(8))
         display.setOnClickListener { toggleHistory() }
 
         val left = LinearLayout(this)
         left.orientation = LinearLayout.VERTICAL
-        chev = TextView(this).apply { setTextColor(accent); textSize = 22f }
+        chev = TextView(this).apply { setTextColor(calcTheme.accent); textSize = 22f }
+        val themeBtn = TextView(this).apply {
+            text = "\uD83C\uDFA8"
+            textSize = 20f
+            setPadding(0, dp(6), 0, dp(6))
+            contentDescription = "Change theme"
+            setOnClickListener { cycleTheme() }
+        }
         val paw = TextView(this).apply { text = "\uD83D\uDC3E"; textSize = 22f }
-        left.addView(chev, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
+        left.addView(chev, LinearLayout.LayoutParams(wrap, wrap))
+        left.addView(themeBtn, LinearLayout.LayoutParams(wrap, wrap))
         left.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-        left.addView(paw, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        left.addView(paw, LinearLayout.LayoutParams(wrap, wrap))
         display.addView(left, LinearLayout.LayoutParams(dp(36), MP))
 
         val right = LinearLayout(this)
         right.orientation = LinearLayout.VERTICAL
-        subText = autoText(22, 8, grey, false)
-        mainText = autoText(72, 12, lilac, false)
+        subText = autoText(22, 8, calcTheme.sub)
+        mainText = autoText(72, 12, calcTheme.main)
         right.addView(subText, LinearLayout.LayoutParams(MP, 0, 1f))
         right.addView(mainText, LinearLayout.LayoutParams(MP, 0, 2.2f))
         display.addView(right, LinearLayout.LayoutParams(0, MP, 1f))
@@ -119,7 +140,7 @@ class MainActivity : Activity() {
 
         val keypad = LinearLayout(this)
         keypad.orientation = LinearLayout.VERTICAL
-        CalcLogic.ROWS.forEach { rowIds ->
+        calcTheme.rows.forEach { rowIds ->
             val row = LinearLayout(this)
             row.orientation = LinearLayout.HORIZONTAL
             rowIds.forEach { id -> row.addView(makeKey(id), LinearLayout.LayoutParams(0, MP, 1f)) }
@@ -129,7 +150,7 @@ class MainActivity : Activity() {
 
         histPanel = LinearLayout(this)
         histPanel.orientation = LinearLayout.VERTICAL
-        histPanel.setBackgroundResource(R.drawable.bg_display)
+        histPanel.setBackgroundResource(calcTheme.bgDisplay)
         histPanel.setPadding(dp(10), dp(10), dp(10), dp(10))
         histPanel.visibility = View.GONE
         histPanel.isClickable = true
@@ -137,9 +158,9 @@ class MainActivity : Activity() {
         val header = LinearLayout(this)
         header.orientation = LinearLayout.HORIZONTAL
         header.gravity = Gravity.CENTER_VERTICAL
-        histTitle = TextView(this).apply { setTextColor(grey); textSize = 15f }
+        histTitle = TextView(this).apply { setTextColor(calcTheme.sub); textSize = 15f }
         val clear = TextView(this).apply {
-            text = "Clear"; setTextColor(lilac); textSize = 15f; typeface = Typeface.DEFAULT_BOLD
+            text = "Clear"; setTextColor(calcTheme.main); textSize = 15f; typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(12), dp(8), dp(12), dp(8))
             setOnClickListener {
                 state = state.copy(hist = "", last = "")
@@ -162,10 +183,11 @@ class MainActivity : Activity() {
 
     private fun makeKey(id: String): ImageView {
         val iv = ImageView(this)
-        val res = resources.getIdentifier("k_$id", "drawable", packageName)
+        val res = resources.getIdentifier(calcTheme.prefix + "_" + id, "drawable", packageName)
         iv.setImageResource(res)
         iv.scaleType = ImageView.ScaleType.FIT_CENTER
         iv.setPadding(dp(3), dp(3), dp(3), dp(3))
+        if (id == "mascot") return iv // decoration only, not a key
         iv.contentDescription = CalcLogic.sym(id)
         iv.setOnTouchListener { v, ev ->
             when (ev.action) {
@@ -203,7 +225,7 @@ class MainActivity : Activity() {
         histItems.removeAllViews()
         if (items.isEmpty()) {
             histItems.addView(TextView(this).apply {
-                text = "No operations yet"; setTextColor(grey); textSize = 16f
+                text = "No operations yet"; setTextColor(calcTheme.sub); textSize = 16f
                 gravity = Gravity.CENTER; setPadding(dp(8), dp(32), dp(8), dp(8))
             }, LinearLayout.LayoutParams(MP, ViewGroup.LayoutParams.WRAP_CONTENT))
             return
@@ -214,10 +236,10 @@ class MainActivity : Activity() {
             row.gravity = Gravity.END
             row.setPadding(dp(8), dp(8), dp(8), dp(8))
             row.addView(TextView(this).apply {
-                text = item.first + " ="; setTextColor(grey); textSize = 15f; maxLines = 1
+                text = item.first + " ="; setTextColor(calcTheme.sub); textSize = 15f; maxLines = 1
             })
             row.addView(TextView(this).apply {
-                text = item.second; setTextColor(lilac); textSize = 26f; maxLines = 1
+                text = item.second; setTextColor(calcTheme.main); textSize = 26f; maxLines = 1
                 typeface = Typeface.DEFAULT_BOLD
             })
             row.setOnClickListener {
@@ -226,7 +248,7 @@ class MainActivity : Activity() {
                 toggleHistory()
             }
             histItems.addView(row, LinearLayout.LayoutParams(MP, ViewGroup.LayoutParams.WRAP_CONTENT))
-            histItems.addView(View(this).apply { setBackgroundColor(Color.parseColor("#261845")) },
+            histItems.addView(View(this).apply { setBackgroundColor(calcTheme.line) },
                 LinearLayout.LayoutParams(MP, dp(1)))
         }
     }

@@ -36,6 +36,7 @@ object CalcLogic {
         (listOf("$e\t$r") + h.split("\n").filter { it.isNotEmpty() }).take(MAX_HIST).joinToString("\n")
 
     fun press(s: CalcState, key: String): CalcState {
+        if (key == "mascot") return s
         var expr = s.expr
         var fresh = s.fresh
         var last = s.last
