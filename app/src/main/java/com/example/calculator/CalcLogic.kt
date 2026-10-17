@@ -17,7 +17,7 @@ object CalcLogic {
         listOf("7", "8", "9", "mul"),
         listOf("4", "5", "6", "sub"),
         listOf("1", "2", "3", "add"),
-        listOf("0", "00", "dot", "eq")
+        listOf("00", "0", "dot", "eq")
     )
 
     fun sym(id: String) = when (id) {
