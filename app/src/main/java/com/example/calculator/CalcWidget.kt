@@ -71,6 +71,30 @@ private fun tile(id: String): Int = when (id) {
     "0" -> R.drawable.k_0; "00" -> R.drawable.k_00; "dot" -> R.drawable.k_dot; else -> R.drawable.k_eq
 }
 
+// Selector drawables: pressed state shrinks the tile slightly (press-in effect)
+private fun tileSel(id: String): Int = when (id) {
+    "c" -> R.drawable.ks_c
+    "bk" -> R.drawable.ks_bk
+    "pct" -> R.drawable.ks_pct
+    "div" -> R.drawable.ks_div
+    "7" -> R.drawable.ks_7
+    "8" -> R.drawable.ks_8
+    "9" -> R.drawable.ks_9
+    "mul" -> R.drawable.ks_mul
+    "4" -> R.drawable.ks_4
+    "5" -> R.drawable.ks_5
+    "6" -> R.drawable.ks_6
+    "sub" -> R.drawable.ks_sub
+    "1" -> R.drawable.ks_1
+    "2" -> R.drawable.ks_2
+    "3" -> R.drawable.ks_3
+    "add" -> R.drawable.ks_add
+    "0" -> R.drawable.ks_0
+    "00" -> R.drawable.ks_00
+    "dot" -> R.drawable.ks_dot
+    else -> R.drawable.ks_eq
+}
+
 class CalcWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
     override val stateDefinition = PreferencesGlanceStateDefinition
@@ -115,7 +139,7 @@ class CalcWidget : GlanceAppWidget() {
                 Row(
                     modifier = GlanceModifier.fillMaxSize()
                         .background(ImageProvider(R.drawable.bg_display))
-                        .clickable(actionRunCallback<ToggleHistoryAction>())
+                        .clickable(rippleOverride = R.drawable.no_ripple, onClick = actionRunCallback<ToggleHistoryAction>())
                         .padding(start = 8.dp, end = 10.dp, top = 2.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -166,7 +190,7 @@ class CalcWidget : GlanceAppWidget() {
                         )
                         Text(
                             text = "Clear",
-                            modifier = GlanceModifier.clickable(actionRunCallback<ClearHistoryAction>()).padding(4.dp),
+                            modifier = GlanceModifier.clickable(rippleOverride = R.drawable.no_ripple, onClick = actionRunCallback<ClearHistoryAction>()).padding(4.dp),
                             style = TextStyle(color = lilac, fontSize = (cell * 0.2f).coerceIn(9f, 14f).sp, fontWeight = FontWeight.Bold)
                         )
                     }
@@ -182,7 +206,7 @@ class CalcWidget : GlanceAppWidget() {
                                 Column(
                                     modifier = GlanceModifier.fillMaxWidth()
                                         .padding(horizontal = 10.dp, vertical = 4.dp)
-                                        .clickable(actionRunCallback<PickHistoryAction>(actionParametersOf(IDX to index))),
+                                        .clickable(rippleOverride = R.drawable.no_ripple, onClick = actionRunCallback<PickHistoryAction>(actionParametersOf(IDX to index))),
                                     horizontalAlignment = Alignment.End
                                 ) {
                                     Text(
@@ -206,11 +230,11 @@ class CalcWidget : GlanceAppWidget() {
                         row.forEach { id ->
                             Box(
                                 modifier = GlanceModifier.defaultWeight().fillMaxHeight().padding(2.dp)
-                                    .clickable(actionRunCallback<KeyAction>(actionParametersOf(KEY to id))),
+                                    .clickable(rippleOverride = R.drawable.no_ripple, onClick = actionRunCallback<KeyAction>(actionParametersOf(KEY to id))),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Image(
-                                    provider = ImageProvider(tile(id)),
+                                    provider = ImageProvider(tileSel(id)),
                                     contentDescription = CalcLogic.sym(id),
                                     contentScale = ContentScale.Fit,
                                     modifier = GlanceModifier.fillMaxSize()
