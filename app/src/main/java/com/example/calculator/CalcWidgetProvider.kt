@@ -7,14 +7,14 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 
 /**
- * Classic RemoteViews widget: every tap is handled right here and the widget is redrawn
- * immediately (no background jobs), so it keeps responding even right after the app was closed.
+ * Classic RemoteViews widget with no system list service: every tap is handled here and the whole
+ * widget (including the history pages) is redrawn immediately, so nothing can get stuck after the
+ * app is closed.
  */
 class CalcWidgetProvider : AppWidgetProvider() {
 
@@ -37,24 +37,34 @@ class CalcWidgetProvider : AppWidgetProvider() {
                 val key = intent.getStringExtra(EXTRA_KEY)
                 if (key != null) {
                     saveState(context, CalcLogic.press(loadState(context), key))
+                    if (key == "eq") setOffset(context, 0)
                     refresh(context)
                 }
             }
             ACTION_TOGGLE -> {
                 setOpen(context, !isOpen(context))
+                setOffset(context, 0)
                 refresh(context)
             }
             ACTION_CLEAR -> {
                 saveState(context, loadState(context).copy(hist = "", last = ""))
+                setOffset(context, 0)
                 refresh(context)
             }
             ACTION_PICK -> {
-                val idx = intent.getIntExtra(EXTRA_IDX, -1)
+                val idx = intent.getIntExtra(EXTRA_N, -1)
                 if (idx >= 0) {
                     saveState(context, CalcLogic.pick(loadState(context), idx))
                     setOpen(context, false)
                     refresh(context)
                 }
+            }
+            ACTION_PAGE -> {
+                val step = intent.getIntExtra(EXTRA_N, 0)
+                val count = CalcLogic.parseHist(loadState(context).hist).size
+                val next = (getOffset(context) + step).coerceIn(0, maxOf(0, count - 1))
+                setOffset(context, next)
+                refresh(context)
             }
             else -> super.onReceive(context, intent)
         }
@@ -65,9 +75,11 @@ class CalcWidgetProvider : AppWidgetProvider() {
         const val ACTION_TOGGLE = "com.example.calculator.TOGGLE"
         const val ACTION_CLEAR = "com.example.calculator.CLEAR"
         const val ACTION_PICK = "com.example.calculator.PICK"
+        const val ACTION_PAGE = "com.example.calculator.PAGE"
         const val EXTRA_KEY = "key"
-        const val EXTRA_IDX = "idx"
+        const val EXTRA_N = "n"
         private const val PREFS = "widget_calc"
+        private const val MAX_ROWS = 8
 
         private val KEY_VIEWS = mapOf(
             "c" to R.id.k_c,
@@ -91,6 +103,9 @@ class CalcWidgetProvider : AppWidgetProvider() {
             "dot" to R.id.k_dot,
             "eq" to R.id.k_eq
         )
+        private val ROW_IDS = intArrayOf(R.id.h_row_0, R.id.h_row_1, R.id.h_row_2, R.id.h_row_3, R.id.h_row_4, R.id.h_row_5, R.id.h_row_6, R.id.h_row_7)
+        private val E_IDS = intArrayOf(R.id.h_e_0, R.id.h_e_1, R.id.h_e_2, R.id.h_e_3, R.id.h_e_4, R.id.h_e_5, R.id.h_e_6, R.id.h_e_7)
+        private val R_IDS = intArrayOf(R.id.h_r_0, R.id.h_r_1, R.id.h_r_2, R.id.h_r_3, R.id.h_r_4, R.id.h_r_5, R.id.h_r_6, R.id.h_r_7)
 
         fun loadState(ctx: Context): CalcState {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -118,40 +133,53 @@ class CalcWidgetProvider : AppWidgetProvider() {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("open", open).apply()
         }
 
+        fun getOffset(ctx: Context): Int =
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("hoff", 0)
+
+        fun setOffset(ctx: Context, v: Int) {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("hoff", v).apply()
+        }
+
         private fun broadcast(
             ctx: Context,
             actionName: String,
             dataUri: String,
             key: String? = null,
-            mutable: Boolean = false
+            n: Int? = null
         ): PendingIntent {
             val i = Intent(ctx, CalcWidgetProvider::class.java)
             i.action = actionName
             i.data = Uri.parse(dataUri) // makes every PendingIntent unique
             if (key != null) i.putExtra(EXTRA_KEY, key)
-            var flags = PendingIntent.FLAG_UPDATE_CURRENT
-            if (mutable) {
-                if (Build.VERSION.SDK_INT >= 31) flags = flags or PendingIntent.FLAG_MUTABLE
-            } else {
-                flags = flags or PendingIntent.FLAG_IMMUTABLE
+            if (n != null) i.putExtra(EXTRA_N, n)
+            return PendingIntent.getBroadcast(
+                ctx, 0, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        // How many history rows fit in this widget
+        private fun rowsFor(ctx: Context, widgetId: Int): Int {
+            val h = try {
+                AppWidgetManager.getInstance(ctx).getAppWidgetOptions(widgetId)
+                    .getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 330)
+            } catch (e: Exception) {
+                330
             }
-            return PendingIntent.getBroadcast(ctx, 0, i, flags)
+            val usable = h * 5f / 6f - 52f
+            return (usable / 42f).toInt().coerceIn(3, MAX_ROWS)
         }
 
         private fun buildViews(ctx: Context, widgetId: Int): RemoteViews {
             val rv = RemoteViews(ctx.packageName, R.layout.widget_calc)
             val s = loadState(ctx)
             val open = isOpen(ctx)
+            val items = CalcLogic.parseHist(s.hist)
 
             rv.setTextViewText(R.id.w_main, s.expr.ifEmpty { "0" })
             rv.setTextViewText(R.id.w_last, s.last.ifEmpty { " " })
             rv.setTextViewText(R.id.w_chev, if (open) "\u2303" else "\u2304")
             rv.setViewVisibility(R.id.w_keypad, if (open) View.GONE else View.VISIBLE)
             rv.setViewVisibility(R.id.w_hist, if (open) View.VISIBLE else View.GONE)
-            rv.setTextViewText(
-                R.id.w_hist_title,
-                "History (" + CalcLogic.parseHist(s.hist).size + "/" + CalcLogic.MAX_HIST + ")"
-            )
 
             for ((key, viewId) in KEY_VIEWS) {
                 rv.setOnClickPendingIntent(viewId, broadcast(ctx, ACTION_KEY, "calc://key/" + key, key))
@@ -159,14 +187,33 @@ class CalcWidgetProvider : AppWidgetProvider() {
             rv.setOnClickPendingIntent(R.id.w_display, broadcast(ctx, ACTION_TOGGLE, "calc://toggle"))
             rv.setOnClickPendingIntent(R.id.w_clear, broadcast(ctx, ACTION_CLEAR, "calc://clear"))
 
-            val svc = Intent(ctx, HistoryService::class.java)
-            svc.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
-            svc.data = Uri.parse(svc.toUri(Intent.URI_INTENT_SCHEME))
-            rv.setRemoteAdapter(R.id.hist_list, svc)
-            rv.setEmptyView(R.id.hist_list, R.id.hist_empty)
-            rv.setPendingIntentTemplate(
-                R.id.hist_list,
-                broadcast(ctx, ACTION_PICK, "calc://pick", null, true)
+            // History: one page of rows, with up/down arrows to move through all 50
+            val rows = rowsFor(ctx, widgetId)
+            val off = getOffset(ctx).coerceIn(0, maxOf(0, items.size - 1))
+            rv.setTextViewText(R.id.w_hist_title, "History (" + items.size + "/" + CalcLogic.MAX_HIST + ")")
+            rv.setViewVisibility(R.id.h_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
+            for (i in 0 until MAX_ROWS) {
+                if (i >= rows) {
+                    rv.setViewVisibility(ROW_IDS[i], View.GONE)
+                    continue
+                }
+                val abs = off + i
+                if (abs >= items.size) {
+                    rv.setViewVisibility(ROW_IDS[i], View.INVISIBLE)
+                    continue
+                }
+                rv.setViewVisibility(ROW_IDS[i], View.VISIBLE)
+                rv.setTextViewText(E_IDS[i], items[abs].first + " =")
+                rv.setTextViewText(R_IDS[i], items[abs].second)
+                rv.setOnClickPendingIntent(
+                    ROW_IDS[i], broadcast(ctx, ACTION_PICK, "calc://pick/" + abs, null, abs)
+                )
+            }
+            rv.setOnClickPendingIntent(
+                R.id.w_up, broadcast(ctx, ACTION_PAGE, "calc://page/up/" + rows, null, -rows)
+            )
+            rv.setOnClickPendingIntent(
+                R.id.w_down, broadcast(ctx, ACTION_PAGE, "calc://page/down/" + rows, null, rows)
             )
             return rv
         }
@@ -174,9 +221,7 @@ class CalcWidgetProvider : AppWidgetProvider() {
         fun refresh(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, CalcWidgetProvider::class.java))
-            if (ids.isEmpty()) return
             for (id in ids) mgr.updateAppWidget(id, buildViews(ctx, id))
-            mgr.notifyAppWidgetViewDataChanged(ids, R.id.hist_list)
         }
     }
 }

@@ -22,10 +22,5 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/calc_widget_info" />
         </receiver>
-
-        <service
-            android:name=".HistoryService"
-            android:exported="false"
-            android:permission="android.permission.BIND_REMOTEVIEWS" />
     </application>
 </manifest>
