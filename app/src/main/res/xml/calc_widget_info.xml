@@ -7,7 +7,7 @@
     android:targetCellWidth="3"
     android:targetCellHeight="4"
     android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="0"
+    android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
     android:previewImage="@drawable/widget_preview"
-    android:initialLayout="@layout/glance_default_loading_layout" />
+    android:initialLayout="@layout/widget_calc" />

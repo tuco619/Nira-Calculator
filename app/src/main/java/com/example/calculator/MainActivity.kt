@@ -1,6 +1,9 @@
 package com.example.calculator
 
 import android.app.Activity
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -44,6 +47,24 @@ class MainActivity : Activity() {
         )
         setContentView(buildUi())
         refresh()
+    }
+
+    // After the app was force-closed, Android cancels the widget's tap actions.
+    // Asking the widget to redraw gives it fresh ones, so it works again.
+    override fun onResume() {
+        super.onResume()
+        refreshWidgets()
+    }
+
+    private fun refreshWidgets() {
+        val ids = AppWidgetManager.getInstance(this)
+            .getAppWidgetIds(ComponentName(this, CalcWidgetProvider::class.java))
+        if (ids.isEmpty()) return
+        sendBroadcast(
+            Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                .setClass(this, CalcWidgetProvider::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+        )
     }
 
     private fun autoText(maxSp: Int, minSp: Int, color: Int, bold: Boolean): TextView = TextView(this).apply {
